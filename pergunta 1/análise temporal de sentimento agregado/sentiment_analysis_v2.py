@@ -14,7 +14,7 @@ import datetime
 
 # === Configurações ===
 bert_model = "neuralmind/bert-base-portuguese-cased"
-anotados_csv = "600_comentarios_classificados.csv"
+anotados_csv = "300_test_equal.csv"
 entrada_json = "comentarios_relevantes.json"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -67,7 +67,7 @@ clf.fit(X_train, y_train)
 print("\nRelatório de classificação no conjunto de teste:")
 print(classification_report(y_test, clf.predict(X_test)))
 
-# === 6. Classificar base completa ===
+# === 6. Classificar base completa com ponderação por likes ===
 print("\nClassificando comentários relevantes...")
 with open(entrada_json, "r", encoding="utf-8") as f:
     comentarios = json.load(f)
@@ -77,6 +77,7 @@ resultados = defaultdict(list)
 for comentario in tqdm(comentarios):
     texto = comentario.get("texto", "").strip()
     data = comentario.get("data")
+    likes = comentario.get("likes", 0)
 
     if not texto or not data:
         continue
@@ -89,7 +90,9 @@ for comentario in tqdm(comentarios):
 
     embedding = bert_embed(texto)
     classe = clf.predict([embedding])[0]
-    resultados[ano].append(classe)
+
+    peso = likes + 1  # Mínimo de 1 voto por comentário
+    resultados[ano].extend([classe] * peso)
 
 # === 7. Agregar e plotar ===
 print("Gerando gráfico por ano...")
@@ -106,11 +109,15 @@ for ano in anos:
 plt.figure(figsize=(10, 6))
 for classe, valores in contagens.items():
     plt.plot(anos, valores, label=classe)
-plt.title("Proporção de sentimentos por ano (comentários em português)")
+plt.title("Proporção de sentimentos por ano")
 plt.xlabel("Ano")
 plt.ylabel("Proporção")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("grafico_sentimentos_por_ano.png")
+
+# Garante que todos os anos aparecem no eixo x
+plt.xticks(anos, rotation=45)
+
+plt.savefig("grafico_sentimentos_por_ano_ponderado.png")
 plt.show()
